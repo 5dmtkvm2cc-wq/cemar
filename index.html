@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Encargos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        costcoBlue: '#005DAA',
+                        costcoRed: '#E31837',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Ocultar barra de desplazamiento para un look más limpio */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 pb-24">
+
+    <!-- Encabezado Fijo -->
+    <header class="bg-costcoBlue text-white sticky top-0 z-40 shadow-lg">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+            <h1 class="text-xl md:text-2xl font-bold truncate">
+                <i class="fa-solid fa-truck-fast mr-2"></i>Tus Encargos
+            </h1>
+            <div class="relative flex-1 max-w-md">
+                <input type="text" id="busqueda" onkeyup="filtrarCatalogo()" placeholder="Buscar producto..." 
+                    class="w-full pl-10 pr-4 py-2 rounded-full text-black focus:outline-none focus:ring-2 focus:ring-costcoRed shadow-inner">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-3 text-gray-400"></i>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenedor de Productos -->
+    <main class="max-w-5xl mx-auto px-4 py-6">
+        <div id="gridProductos" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <!-- Los productos se cargan aquí -->
+        </div>
+    </main>
+
+    <!-- Botón Flotante del Carrito -->
+    <div class="fixed bottom-6 left-0 right-0 px-4 z-40 max-w-5xl mx-auto pointer-events-none">
+        <div class="flex justify-end">
+            <button onclick="abrirCarrito()" class="pointer-events-auto bg-costcoRed text-white rounded-full px-6 py-4 shadow-2xl flex items-center gap-3 hover:bg-red-700 transition transform hover:scale-105">
+                <i class="fa-solid fa-cart-shopping text-xl"></i>
+                <span class="font-bold text-lg">Ver Pedido</span>
+                <span id="contadorCarrito" class="bg-white text-costcoRed rounded-full px-3 py-1 text-sm font-bold ml-1">0</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- VENTANA EMERGENTE: Detalles del Producto -->
+    <div id="modalProducto" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto relative shadow-2xl">
+            <button onclick="cerrarModalProducto()" class="absolute top-3 right-4 text-gray-400 hover:text-black text-3xl font-bold bg-white rounded-full w-8 h-8 flex items-center justify-center shadow">&times;</button>
+            <div id="contenidoModal" class="p-0">
+                <!-- El contenido se inserta con JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- VENTANA EMERGENTE: Carrito y Formulario -->
+    <div id="modalCarrito" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full max-h-[95vh] flex flex-col relative shadow-2xl">
+            <div class="p-4 bg-costcoBlue text-white rounded-t-2xl flex justify-between items-center">
+                <h3 class="text-xl font-bold">Resumen de tu Encargo</h3>
+                <button onclick="cerrarCarrito()" class="text-white hover:text-gray-200 text-3xl font-bold">&times;</button>
+            </div>
+
+            <div id="listaCarrito" class="flex-1 overflow-y-auto p-4 divide-y">
+                <!-- Productos del carrito -->
+            </div>
+
+            <form id="formularioPedido" onsubmit="enviarPedido(event)" class="p-4 bg-gray-50 border-t rounded-b-2xl">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-gray-600 font-semibold">Total estimado:</span>
+                    <span id="totalCarrito" class="text-2xl font-black text-costcoBlue">$0.00</span>
+                </div>
+                <div class="space-y-3">
+                    <input type="text" id="nombreCliente" required placeholder="Tu Nombre Completo" class="w-full border p-3 rounded-lg focus:ring-2 focus:ring-costcoBlue outline-none text-lg">
+                    <input type="tel" id="telefonoCliente" required placeholder="Tu WhatsApp (10 dígitos)" class="w-full border p-3 rounded-lg focus:ring-2 focus:ring-costcoBlue outline-none text-lg">
+                    <button type="submit" id="btnEnviar" class="w-full bg-costcoRed text-white font-bold py-3.5 rounded-xl text-lg shadow-md hover:bg-red-700 transition">
+                        Confirmar y Enviar Pedido
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const URL_WEBHOOK = "https://script.google.com/macros/s/AKfycbwtihuMcgSflwpvnPjO1qWmvmkKDzRV6ncMfWsblVgGsTJECi8N8hSYri-BT6irdORSiQ/exec";
+
+        const inventario = [
+            { id: 1, nombre: "Papel Higiénico Kirkland 40 Rollos", precio: 540, imagen: "https://images.unsplash.com/photo-1584556812952-905ffd0c611a?w=600", descripcion: "Paquete gigante de papel ultra suave y resistente. Rinde muchísimo." },
+            { id: 2, nombre: "Galletas con Chispas de Chocolate 1.4kg", precio: 320, imagen: "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=600", descripcion: "Caja grande de galletas surtidas recién horneadas. Ideales para compartir o para el café." },
+            { id: 3, nombre: "Detergente Líquido Kirkland 5.7L", precio: 460, imagen: "https://m.media-amazon.com/images/I/61C2tr0XBAL.jpg", descripcion: "Bote gigante de detergente. Remueve manchas difíciles y cuida el color de tu ropa." },
+            { id: 4, nombre: "Nuez de la India Tostada 1.13kg", precio: 390, imagen: "https://www.costco.com.mx/medias/sys_master/products/h06/h55/207590432538654.jpg", descripcion: "Bote grande de nueces de la india con un toque de sal marina." },
+            { id: 5, nombre: "Helicoptero Apache", precio: 500, imagen: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQj2E4ohXTSBV5b6rV46cmNeqVeOXsUOUDSQXnX2GDEPQ&s=10", descripcion: "Helicoptero Apache listo para echar chingazos" },
+            { id: 6, nombre: "Cerveza Tecate Light Six Lata", precio: 200, imagen: "https://res.cloudinary.com/riqra/image/upload/v1678811153/sellers/10/g5uvvna5nttxyfz4chjf.jpg", descripcion: "Six perfecto si tiras para el otro lado" },
+            { id: 7, nombre: "Procto-Glyvenol Tratamiento para las hemorroides Crema 30g", precio: 150, imagen: "https://production-media.fahorro.com/media/catalog/product/7/5/7501065008336.jpg?optimize=medium&bg-color=255,255,255&fit=bounds&height=265&width=265&canvas=265:265", descripcion: "Crema para el tratamiento de hemorroides" },
+            { id: 8, nombre: "Peluca de disfraz de Donald Trump", precio: 120, imagen: "https://m.media-amazon.com/images/I/61vetsbzSVL._AC_UF1000,1000_QL80_.jpg", descripcion: "Peluca de disfraz de Donald Trump, incluye peluca y broche de bandera, fibra de poliéster" }
+        ];
+
+        let carrito = [];
+        let cantidadTemporal = 1;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            mostrarProductos(inventario);
+        });
+
+        function mostrarProductos(lista) {
+            const contenedor = document.getElementById("gridProductos");
+            contenedor.innerHTML = lista.map(p => `
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col cursor-pointer hover:shadow-md transition" onclick="abrirModalProducto(${p.id})">
+                    <img src="${p.imagen}" alt="${p.nombre}" class="w-full h-36 object-cover">
+                    <div class="p-3 flex flex-col justify-between flex-1">
+                        <h3 class="font-bold text-gray-800 text-sm md:text-base leading-tight">${p.nombre}</h3>
+                        <p class="text-costcoBlue font-black text-lg mt-2">$${p.precio}</p>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        function filtrarCatalogo() {
+            const texto = document.getElementById("busqueda").value.toLowerCase();
+            const filtrados = inventario.filter(p => p.nombre.toLowerCase().includes(texto));
+            mostrarProductos(filtrados);
+        }
+
+        function abrirModalProducto(id) {
+            const p = inventario.find(prod => prod.id === id);
+            cantidadTemporal = 1;
+            document.getElementById("contenidoModal").innerHTML = `
+                <img src="${p.imagen}" class="w-full h-64 object-cover rounded-t-2xl">
+                <div class="p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 leading-tight">${p.nombre}</h2>
+                    <p class="text-3xl font-black text-costcoBlue mt-2">$${p.precio}</p>
+                    <p class="text-gray-600 mt-4 text-base">${p.descripcion}</p>
+                    
+                    <div class="mt-6 border-t pt-6">
+                        <p class="text-center text-gray-500 text-sm mb-2 font-semibold">¿Cuántos vas a encargar?</p>
+                        <div class="flex items-center justify-center gap-6 mb-6">
+                            <button onclick="cambiarCantidadTemporal(-1)" class="w-12 h-12 bg-gray-100 rounded-full text-2xl font-bold hover:bg-gray-200 text-gray-700 shadow-sm">-</button>
+                            <span id="valorCantidadTemp" class="text-3xl font-black w-10 text-center">${cantidadTemporal}</span>
+                            <button onclick="cambiarCantidadTemporal(1)" class="w-12 h-12 bg-gray-100 rounded-full text-2xl font-bold hover:bg-gray-200 text-gray-700 shadow-sm">+</button>
+                        </div>
+                        <button onclick="agregarAlCarrito(${p.id})" class="w-full bg-costcoRed text-white font-bold py-4 rounded-xl text-xl shadow-lg hover:bg-red-700 transition">
+                            Agregar al Encargo
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.getElementById("modalProducto").classList.remove("hidden");
+        }
+
+        function cambiarCantidadTemporal(cambio) {
+            if (cantidadTemporal + cambio >= 1) {
+                cantidadTemporal += cambio;
+                document.getElementById("valorCantidadTemp").innerText = cantidadTemporal;
+            }
+        }
+
+        function cerrarModalProducto() {
+            document.getElementById("modalProducto").classList.add("hidden");
+        }
+
+        function agregarAlCarrito(id) {
+            const p = inventario.find(prod => prod.id === id);
+            const existe = carrito.find(item => item.id === id);
+            
+            if (existe) {
+                existe.cantidad += cantidadTemporal;
+            } else {
+                carrito.push({ ...p, cantidad: cantidadTemporal });
+            }
+            
+            cerrarModalProducto();
+            actualizarCarrito();
+        }
+
+        function actualizarCarrito() {
+            const totalArticulos = carrito.reduce((suma, item) => suma + item.cantidad, 0);
+            const costoTotal = carrito.reduce((suma, item) => suma + (item.precio * item.cantidad), 0);
+            
+            document.getElementById("contadorCarrito").innerText = totalArticulos;
+            document.getElementById("totalCarrito").innerText = `$${costoTotal.toFixed(2)}`;
+
+            const contenedor = document.getElementById("listaCarrito");
+            if (carrito.length === 0) {
+                contenedor.innerHTML = `<div class="text-center text-gray-400 py-10"><i class="fa-solid fa-basket-shopping text-5xl mb-3"></i><p>Aún no hay productos.</p></div>`;
+                return;
+            }
+
+            contenedor.innerHTML = carrito.map(item => `
+                <div class="flex items-center justify-between py-4">
+                    <div class="flex-1 pr-3">
+                        <h4 class="font-bold text-gray-800 leading-tight">${item.nombre}</h4>
+                        <p class="text-costcoBlue font-bold text-sm mt-1">$${item.precio} <span class="text-gray-400 font-normal">x ${item.cantidad}</span></p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-gray-100 p-1.5 rounded-lg border">
+                        <button onclick="modificarCarrito(${item.id}, -1)" class="w-8 h-8 bg-white rounded shadow-sm font-bold text-lg text-gray-700">-</button>
+                        <span class="font-bold text-lg w-4 text-center">${item.cantidad}</span>
+                        <button onclick="modificarCarrito(${item.id}, 1)" class="w-8 h-8 bg-white rounded shadow-sm font-bold text-lg text-gray-700">+</button>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        function modificarCarrito(id, cambio) {
+            const item = carrito.find(i => i.id === id);
+            if (item) {
+                item.cantidad += cambio;
+                if (item.cantidad <= 0) carrito = carrito.filter(i => i.id !== id);
+                actualizarCarrito();
+            }
+        }
+
+        function abrirCarrito() {
+            document.getElementById("modalCarrito").classList.remove("hidden");
+            actualizarCarrito();
+        }
+
+        function cerrarCarrito() {
+            document.getElementById("modalCarrito").classList.add("hidden");
+        }
+
+        async function enviarPedido(e) {
+            e.preventDefault();
+            if (carrito.length === 0) {
+                alert("Primero agrega productos a tu encargo.");
+                return;
+            }
+
+            const btn = document.getElementById("btnEnviar");
+            btn.disabled = true;
+            btn.innerText = "Registrando...";
+            btn.classList.add("opacity-75");
+
+            const datosPedido = {
+                fecha: new Date().toLocaleString("es-MX"),
+                nombre: document.getElementById("nombreCliente").value,
+                telefono: document.getElementById("telefonoCliente").value,
+                productos: carrito.map(i => `${i.nombre} (x${i.cantidad})`).join(" \n "),
+                total: carrito.reduce((suma, item) => suma + (item.precio * item.cantidad), 0)
+            };
+
+            try {
+                await fetch(URL_WEBHOOK, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(datosPedido)
+                });
+
+                alert("¡Listo! Tu encargo quedó registrado. Te avisaremos cuando llegue al local.");
+                carrito = [];
+                actualizarCarrito();
+                document.getElementById("formularioPedido").reset();
+                cerrarCarrito();
+            } catch (error) {
+                alert("Uy, hubo un error de conexión. Intenta de nuevo.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Confirmar y Enviar Pedido";
+                btn.classList.remove("opacity-75");
+            }
+        }
+    </script>
+</body>
+</html>
